@@ -1,0 +1,138 @@
+name: Build FaceFind APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Create Android project
+        run: flutter create --platforms=android --org com.facefind.app --project-name facefind /tmp/facefind_android
+
+      - name: Copy app source
+        run: |
+          cp mobile/pubspec.yaml /tmp/facefind_android/pubspec.yaml
+          rm -rf /tmp/facefind_android/lib && cp -r mobile/lib /tmp/facefind_android/lib
+
+      - name: Add AdMob App ID
+        run: |
+          python3 - <<'PYMANIFEST'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          ET.register_namespace("android", "http://schemas.android.com/apk/res/android")
+          p = Path("/tmp/facefind_android/android/app/src/main/AndroidManifest.xml")
+          tree = ET.parse(p)
+          root = tree.getroot()
+          ns = "{http://schemas.android.com/apk/res/android}"
+          app = root.find("application")
+          if app is None:
+              raise SystemExit("Android application tag not found")
+          for item in app.findall("meta-data"):
+              if item.get(ns + "name") == "com.google.android.gms.ads.APPLICATION_ID":
+                  app.remove(item)
+          ET.SubElement(app, "meta-data", {
+              ns + "name": "com.google.android.gms.ads.APPLICATION_ID",
+              ns + "value": "ca-app-pub-4455023088168031~7152639159"
+          })
+          tree.write(p, encoding="utf-8", xml_declaration=True)
+          PYMANIFEST
+
+      - name: Diagnose Android embedding
+        run: |
+          grep -RniE 'io\.flutter\.app\.|PluginRegistry\.Registrar|registerWith\(Registrar' /tmp/facefind_android/android /root/.pub-cache 2>/dev/null | head -80 || true
+
+      - name: Ensure Android v2 embedding
+        run: |
+          python3 - <<'PYMANIFEST'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          ET.register_namespace("android", "http://schemas.android.com/apk/res/android")
+
+          p = Path("/tmp/facefind_android/android/app/src/main/AndroidManifest.xml")
+          tree = ET.parse(p)
+          root = tree.getroot()
+          ns = "{http://schemas.android.com/apk/res/android}"
+          app = root.find("application")
+          if app is None:
+              raise SystemExit("Android application tag not found")
+
+          app.attrib.pop(ns + "name", None)
+          for item in app.findall("meta-data"):
+              if item.get(ns + "name") in (
+                  "flutterEmbedding",
+                  "com.google.android.gms.ads.APPLICATION_ID"
+              ):
+                  app.remove(item)
+
+          ET.SubElement(app, "meta-data", {
+              ns + "name": "flutterEmbedding",
+              ns + "value": "2"
+          })
+          ET.SubElement(app, "meta-data", {
+              ns + "name": "com.google.android.gms.ads.APPLICATION_ID",
+              ns + "value": "ca-app-pub-4455023088168031~7152639159"
+          })
+          tree.write(p, encoding="utf-8", xml_declaration=True)
+          PYMANIFEST
+          grep -n "flutterEmbedding\|APPLICATION_ID" /tmp/facefind_android/android/app/src/main/AndroidManifest.xml
+
+      - name: Add permissions and show manifest
+        run: |
+          M=/tmp/facefind_android/android/app/src/main/AndroidManifest.xml
+          grep -q "permission.INTERNET" $M || sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET"/><uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/><application|' $M
+          cat $M
+          find /tmp/facefind_android/android/app/src/main -name "MainActivity*"
+
+      - name: Fix activity name
+        run: |
+          A=/tmp/facefind_android/android
+          M=$A/app/src/main/AndroidManifest.xml
+          F=$(find $A/app/src/main -name "MainActivity.*" | head -1)
+          PKG=$(grep -m1 '^package ' $F | sed 's/package //;s/;//' | tr -d '\r ')
+          echo "PKG=$PKG"
+          sed -i "s|android:name=\".MainActivity\"|android:name=\"$PKG.MainActivity\"|" $M
+          grep -n "MainActivity" $M
+          grep -n "namespace\|applicationId\|minSdk" $A/app/build.gradle* || true
+
+      - name: Disable R8 shrinking
+        run: |
+          A=/tmp/facefind_android/android/app
+          G=$(ls $A/build.gradle.kts $A/build.gradle 2>/dev/null | head -1)
+          echo "FILE=$G"
+          if [[ "$G" == *.kts ]]; then
+            sed -i '/buildTypes {/,/^    }/ s|release {|release {\n            isMinifyEnabled = false\n            isShrinkResources = false|' $G
+          else
+            sed -i '/buildTypes {/,/^    }/ s|release {|release {\n            minifyEnabled false\n            shrinkResources false|' $G
+          fi
+          sed -n '/buildTypes/,/^    }/p' $G
+
+      - name: Build APK
+        run: |
+          cd /tmp/facefind_android
+          flutter pub get
+          flutter build apk --release --enable-experiment=dot-shorthands
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: facefind-release-apk
+          path: /tmp/facefind_android/build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Publish GitHub Release
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.${{ github.run_number }}
+          name: FaceFind v1.${{ github.run_number }}
+          files: /tmp/facefind_android/build/app/outputs/flutter-apk/app-release.apk

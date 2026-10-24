@@ -1,0 +1,20 @@
+name: facefind
+description: FaceFind Android app
+publish_to: none
+version: 1.0.0+1
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+dependencies:
+  google_mobile_ads: ^9.2.0
+  flutter:
+    sdk: flutter
+  image_picker: ^1.1.2
+  google_mlkit_face_detection: ^0.13.1
+  url_launcher: ^6.3.1
+  http: ^1.2.2
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+flutter:
+  uses-material-design: true
