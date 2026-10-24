@@ -122,7 +122,7 @@ jobs:
         run: |
           cd /tmp/facefind_android
           flutter pub get
-          flutter build apk --release --enable-experiment=dot-shorthands --dart-define=FACEFIND_API_URL=${{ vars.FACEFIND_API_URL }}
+          flutter build apk --release --enable-experiment=dot-shorthands --dart-define=FACEFIND_API_URL=https://facefind-backend-2n92.onrender.com
 
       - uses: actions/upload-artifact@v4
         with:
