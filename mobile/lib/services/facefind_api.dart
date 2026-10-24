@@ -72,6 +72,27 @@ class FaceFindApi {
     }
   }
 
+  /// Remaining searches for today, as reported by our own backend.
+  Future<Map<String, dynamic>> getUsage() async {
+    try {
+      final http.Response res =
+          await _client.get(_uri('/api/usage')).timeout(_timeout);
+      if (res.statusCode == 200) {
+        final dynamic body = jsonDecode(utf8.decode(res.bodyBytes));
+        if (body is Map<String, dynamic>) return body;
+      }
+      throw ApiException('Could not load usage right now.');
+    } on ApiException {
+      rethrow;
+    } on TimeoutException {
+      throw ApiException('The request timed out. Please try again.');
+    } on SocketException {
+      throw ApiException('No internet connection. Please check your network.');
+    } catch (_) {
+      throw ApiException('Could not reach the server. Please try again.');
+    }
+  }
+
   ScanState _parse(http.Response res) {
     if (res.statusCode >= 200 && res.statusCode < 300) {
       final dynamic body = jsonDecode(utf8.decode(res.bodyBytes));

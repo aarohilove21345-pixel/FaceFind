@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../ad_manager.dart';
 import '../models/scan_result.dart';
 import '../services/facefind_api.dart';
+import '../services/history_store.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -93,8 +94,8 @@ class _HomePageState extends State<HomePage> {
       builder: (ctx) => AlertDialog(
         title: const Text('Before you continue'),
         content: const Text(
-          'Your photo will be uploaded to an external face-search service to '
-          'look for matching public profiles. Only upload photos of yourself '
+          'Your photo will be uploaded to an external image-search service to '
+          'look for web pages where it appears. Only upload photos of yourself '
           'or of people who have given you permission.\n\n'
           'Match scores are not proof of identity. Results may be wrong.',
         ),
@@ -159,6 +160,8 @@ class _HomePageState extends State<HomePage> {
       if (scan.isFailed) {
         throw ApiException(scan.errorMessage ?? 'The scan failed. Please try again.');
       }
+      await HistoryStore.add(scan);
+      if (!mounted) return;
       setState(() => _statusText = 'Scan complete');
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
@@ -197,7 +200,7 @@ class _HomePageState extends State<HomePage> {
         _header(),
         const SizedBox(height: 8),
         const Text(
-          'Select a photo and FaceFind will look for matching public profiles.',
+          'Select a photo and FaceFind will look for web pages where it appears.',
           textAlign: TextAlign.center,
           style: TextStyle(color: Colors.white70),
         ),
@@ -446,6 +449,11 @@ class _HomePageState extends State<HomePage> {
                 Text(m.platform ?? 'Unknown platform',
                     style: const TextStyle(
                         fontSize: 16, fontWeight: FontWeight.w600)),
+                if (m.title != null)
+                  Text(m.title!,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Colors.white70)),
                 if (m.handle != null)
                   Text(m.handle!,
                       style: const TextStyle(color: Color(0xFF0A84FF))),
@@ -458,7 +466,7 @@ class _HomePageState extends State<HomePage> {
           if (m.profileUrl != null)
             FilledButton(
               onPressed: () => _openProfile(m.profileUrl!),
-              child: const Text('Open Profile'),
+              child: const Text('Open Page'),
             ),
         ],
       ),

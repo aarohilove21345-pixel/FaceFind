@@ -13,6 +13,7 @@ double? _num(dynamic v) {
 
 class MatchResult {
   final String? platform;
+  final String? title;
   final String? handle;
   final double? score;
   final String? profileUrl;
@@ -20,6 +21,7 @@ class MatchResult {
 
   const MatchResult({
     this.platform,
+    this.title,
     this.handle,
     this.score,
     this.profileUrl,
@@ -29,6 +31,7 @@ class MatchResult {
   factory MatchResult.fromJson(Map<String, dynamic> j) {
     return MatchResult(
       platform: _str(j['platform'] ?? j['source'] ?? j['site']),
+      title: _str(j['title']),
       handle: _str(j['handle'] ?? j['username']),
       score: _num(j['score'] ?? j['match_score'] ?? j['similarity']),
       profileUrl: _str(j['profile_url'] ?? j['url'] ?? j['link']),
