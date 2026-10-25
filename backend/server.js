@@ -95,6 +95,44 @@ app.get('/tmp/:token', (req, res) => {
   res.send(item.buffer);
 });
 
+async function serpSearch(params) {
+  const query = new URLSearchParams({ ...params, api_key: SERPAPI_KEY });
+  const upstream = await fetch(`https://serpapi.com/search.json?${query}`, {
+    signal: AbortSignal.timeout(60 * 1000),
+  });
+  let data = {};
+  try {
+    data = await upstream.json();
+  } catch (_) {
+    data = {};
+  }
+  return { ok: upstream.ok && !data.error, status: upstream.status, data };
+}
+
+function pickMatches(list) {
+  const out = [];
+  const seen = new Set();
+  if (!Array.isArray(list)) return out;
+  for (const item of list) {
+    if (out.length >= 20) break;
+    if (!item || typeof item.link !== 'string' || !/^https?:\/\//i.test(item.link)) continue;
+    if (seen.has(item.link)) continue;
+    seen.add(item.link);
+    let preview = null;
+    if (item.thumbnail && typeof item.thumbnail === 'object') preview = item.thumbnail.link;
+    else if (typeof item.thumbnail === 'string') preview = item.thumbnail;
+    else if (typeof item.image === 'string') preview = item.image;
+    if (typeof preview !== 'string' || !/^https?:\/\//i.test(preview)) preview = null;
+    out.push({
+      platform: item.source || null,
+      title: item.title || null,
+      profile_url: item.link,
+      preview_url: preview,
+    });
+  }
+  return out;
+}
+
 app.post('/api/scans', limiter, upload.single('image'), async (req, res) => {
   if (!SERPAPI_KEY || !PUBLIC_URL) {
     return res.status(503).json({ error: 'The service is not configured yet.' });
@@ -122,45 +160,41 @@ app.post('/api/scans', limiter, upload.single('image'), async (req, res) => {
   images.set(key, { buffer: req.file.buffer, type, expires: Date.now() + IMAGE_TTL_MS });
 
   try {
-    const query = new URLSearchParams({
-      engine: 'yandex_images',
-      url: `${PUBLIC_URL}/tmp/${key}`,
-      api_key: SERPAPI_KEY,
-    });
-    const upstream = await fetch(`https://serpapi.com/search.json?${query}`, {
-      signal: AbortSignal.timeout(60 * 1000),
-    });
-    let data = {};
-    try {
-      data = await upstream.json();
-    } catch (_) {
-      data = {};
+    const imageUrl = `${PUBLIC_URL}/tmp/${key}`;
+    let matches = [];
+    let anyOk = false;
+    let lastFail = null;
+
+    // 1) Google Lens first. 2) Yandex only if Lens found nothing or failed.
+    const lens = await serpSearch({ engine: 'google_lens', url: imageUrl });
+    if (lens.ok) {
+      anyOk = true;
+      matches = pickMatches(lens.data.visual_matches);
+    } else {
+      lastFail = lens;
     }
 
-    if (!upstream.ok || data.error) {
+    if (matches.length === 0) {
+      const yandex = await serpSearch({ engine: 'yandex_images', url: imageUrl });
+      if (yandex.ok) {
+        anyOk = true;
+        matches = pickMatches(yandex.data.image_results);
+      } else {
+        lastFail = yandex;
+      }
+    }
+
+    if (!anyOk) {
       refundSlot();
-      const msg = String(data.error || '').toLowerCase();
-      if (upstream.status === 429 || msg.includes('run out of searches')) {
+      const msg = String((lastFail && lastFail.data && lastFail.data.error) || '').toLowerCase();
+      const code = lastFail ? lastFail.status : 0;
+      if (code === 429 || msg.includes('run out of searches')) {
         return res.status(402).json({ error: 'The search service has no searches left this month.' });
       }
-      if (upstream.status === 401 || upstream.status === 403) {
+      if (code === 401 || code === 403) {
         return res.status(502).json({ error: 'The search service rejected the request.' });
       }
       return res.status(502).json({ error: 'The search service could not process this photo.' });
-    }
-
-    const list = Array.isArray(data.image_results) ? data.image_results : [];
-    const matches = [];
-    for (const item of list) {
-      if (matches.length >= 20) break;
-      if (!item || typeof item.link !== 'string' || !/^https?:\/\//i.test(item.link)) continue;
-      const preview = item.thumbnail && typeof item.thumbnail.link === 'string' ? item.thumbnail.link : null;
-      matches.push({
-        platform: item.source || null,
-        title: item.title || null,
-        profile_url: item.link,
-        preview_url: preview,
-      });
     }
 
     const id = crypto.randomBytes(12).toString('hex');

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'ad_manager.dart';
+import 'nav.dart';
 import 'screens/credits_page.dart';
 import 'screens/history_page.dart';
 import 'screens/home_page.dart';
@@ -26,9 +27,10 @@ class FaceFindApp extends StatelessWidget {
         useMaterial3: true,
         brightness: Brightness.dark,
         scaffoldBackgroundColor: Colors.black,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF0A84FF),
-          brightness: Brightness.dark,
+        colorScheme: const ColorScheme.dark(
+          primary: Color(0xFF0A84FF),
+          onPrimary: Colors.white,
+          secondary: Color(0xFF00C6FB),
         ),
         cardColor: const Color(0xFF121212),
       ),
@@ -46,6 +48,26 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   int _index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    tabRequest.addListener(_onTabRequest);
+  }
+
+  @override
+  void dispose() {
+    tabRequest.removeListener(_onTabRequest);
+    super.dispose();
+  }
+
+  void _onTabRequest() {
+    final int? i = tabRequest.value;
+    if (i != null && mounted) {
+      setState(() => _index = i);
+      tabRequest.value = null;
+    }
+  }
 
   static const List<Widget> _pages = [
     HomePage(),

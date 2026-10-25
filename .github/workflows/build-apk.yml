@@ -118,6 +118,28 @@ jobs:
           fi
           sed -n '/buildTypes/,/^    }/p' $G
 
+      - name: Set app icon and name
+        run: |
+          RES=/tmp/facefind_android/android/app/src/main/res
+          M=/tmp/facefind_android/android/app/src/main/AndroidManifest.xml
+          sed -i 's|android:label="facefind"|android:label="FaceFind"|' $M
+          cp $GITHUB_WORKSPACE/mobile/logo.jpg /tmp/facefind_android/logo.jpg
+          rm -f $RES/mipmap-anydpi-v26/ic_launcher.xml
+          pip install pillow
+          python3 - <<'PY'
+          import glob, os
+          from PIL import Image
+          res = '/tmp/facefind_android/android/app/src/main/res'
+          src = Image.open(os.environ['GITHUB_WORKSPACE'] + '/mobile/logo.jpg').convert('RGB')
+          n = 0
+          for f in glob.glob(res + '/mipmap-*/ic_launcher.png'):
+              size = Image.open(f).size
+              src.resize(size, Image.LANCZOS).save(f)
+              n += 1
+          print('icons replaced:', n)
+          PY
+          grep -n "android:label" $M
+
       - name: Build APK
         run: |
           cd /tmp/facefind_android

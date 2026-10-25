@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../ad_manager.dart';
 import '../models/scan_result.dart';
+import '../nav.dart';
 import '../services/facefind_api.dart';
 import '../services/history_store.dart';
 
@@ -234,13 +235,37 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _header() {
-    return const Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+    return Row(
       children: [
-        Icon(Icons.center_focus_strong, color: Color(0xFF0A84FF), size: 36),
-        SizedBox(width: 8),
-        Text('FaceFind',
-            style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
+        const SizedBox(width: 48),
+        Expanded(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Image.asset(
+                  'logo.jpg',
+                  width: 40,
+                  height: 40,
+                  cacheWidth: 120,
+                  errorBuilder: (_, __, ___) => const Icon(
+                      Icons.center_focus_strong,
+                      color: Color(0xFF0A84FF),
+                      size: 36),
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Text('FaceFind',
+                  style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
+            ],
+          ),
+        ),
+        IconButton(
+          tooltip: 'Settings',
+          onPressed: () => tabRequest.value = 3,
+          icon: const Icon(Icons.settings_outlined, color: Color(0xFF0A84FF)),
+        ),
       ],
     );
   }

@@ -17,7 +17,7 @@ class ApiException implements Exception {
 class FaceFindApi {
   // Set at build time: --dart-define=FACEFIND_API_URL=https://your-backend
   static const String _baseUrl = String.fromEnvironment('FACEFIND_API_URL');
-  static const Duration _timeout = Duration(seconds: 45);
+  static const Duration _timeout = Duration(seconds: 150);
 
   static bool get isConfigured => _baseUrl.startsWith('https://');
 
